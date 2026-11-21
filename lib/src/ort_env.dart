@@ -16,13 +16,19 @@ class OrtEnv {
 
   late ffi.Pointer<bg.OrtApi> _ortApiPtr;
 
-  static OrtApiVersion _apiVersion = OrtApiVersion.api14;
+  static OrtApiVersion _apiVersion = OrtApiVersion.api22;
 
   OrtEnv._() {
     _ortApiPtr = onnxRuntimeBinding.OrtGetApiBase()
         .ref
         .GetApi
         .asFunction<ffi.Pointer<bg.OrtApi> Function(int)>()(_apiVersion.value);
+    // GetApi returns null when the native library is older than the
+    // requested API version; reading the table would then be undefined.
+    if (_ortApiPtr == ffi.nullptr) {
+      throw StateError('ONNX Runtime $version does not support API version '
+          '${_apiVersion.value}; this plugin needs ONNX Runtime 1.22 or newer.');
+    }
   }
 
   /// Set ort's api version.
@@ -143,6 +149,9 @@ enum OrtApiVersion {
 
   /// Post 1.13 builds of the ORT API.
   api14(14),
+
+  /// ONNX Runtime 1.22, the version the bindings are generated from.
+  api22(22),
 
   /// The initial release of the ORT training API.
   trainingApi1(1);

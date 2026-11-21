@@ -56,9 +56,8 @@ OrtEnv.instance.init();
 ```dart
 final sessionOptions = OrtSessionOptions();
 
-// 🚀 NEW: Automatically use GPU acceleration if available!
-// This will try GPU providers first, then fall back to CPU
-sessionOptions.appendDefaultProviders();
+// Use an accelerator if one is available, with CPU as fallback
+await sessionOptions.appendDefaultProviders();
 
 const assetFileName = 'assets/models/test.onnx';
 final rawAssetFile = await rootBundle.load(assetFileName);
@@ -111,14 +110,18 @@ The easiest way to enable GPU acceleration:
 
 ```dart
 final sessionOptions = OrtSessionOptions();
-sessionOptions.appendDefaultProviders(); // 🎯 That's it!
+await sessionOptions.appendDefaultProviders(); // 🎯 That's it!
 ```
 
 This automatically selects the best available provider in this order:
-1. **GPU**: CUDA → DirectML → ROCm
-2. **NPU**: CoreML → NNAPI → QNN
+1. **NPU**: CoreML → NNAPI → QNN
+2. **GPU**: CUDA → DirectML → ROCm
 3. **Optimized CPU**: DNNL → XNNPACK
 4. **Fallback**: Standard CPU
+
+It adds at most one accelerator, with default options, and never tries
+TensorRT. See [doc/automatic_selection.md](doc/automatic_selection.md) for
+what you get on each platform and how to write your own selection.
 
 ### Manual Provider Selection
 
@@ -126,7 +129,7 @@ For fine-grained control:
 
 ```dart
 // NVIDIA GPU (Windows/Linux)
-sessionOptions.appendCudaProvider(CUDAFlags.useArena);
+sessionOptions.appendCudaProvider({'device_id': '0'});
 
 // NVIDIA with TensorRT optimizations + FP16
 sessionOptions.appendTensorRTProvider({'trt_fp16_enable': '1'});
@@ -135,20 +138,24 @@ sessionOptions.appendTensorRTProvider({'trt_fp16_enable': '1'});
 sessionOptions.appendDirectMLProvider();
 
 // Apple Neural Engine (iOS/macOS)
-sessionOptions.appendCoreMLProvider(CoreMLFlags.useNone);
+sessionOptions.appendCoreMLProvider({'ModelFormat': 'MLProgram'});
 
 // Android acceleration
-sessionOptions.appendNnapiProvider(NnapiFlags.useNone);
+sessionOptions.appendNnapiProvider({NnapiFlags.useFp16});
 
 // AMD GPU on Linux
-sessionOptions.appendRocmProvider(ROCmFlags.useArena);
+sessionOptions.appendRocmProvider({'device_id': '0'});
 
 // Intel optimization
-sessionOptions.appendDNNLProvider(DNNLFlags.useArena);
+sessionOptions.appendDNNLProvider({'use_arena': '1'});
 
 // Always add CPU as fallback
 sessionOptions.appendCPUProvider(CPUFlags.useArena);
 ```
+
+Every option each provider accepts in ONNX Runtime 1.22, which providers the
+bundled binaries include, and how to migrate from the old flag enums:
+**[doc/execution_providers.md](doc/execution_providers.md)**.
 
 ### Performance Tips
 
@@ -194,7 +201,7 @@ OrtEnv.instance.availableProviders().forEach((provider) {
 2. Catch provider errors gracefully:
 ```dart
 try {
-  sessionOptions.appendCudaProvider(CUDAFlags.useArena);
+  sessionOptions.appendCudaProvider();
 } catch (e) {
   print('CUDA not available, falling back to CPU');
   sessionOptions.appendCPUProvider(CPUFlags.useArena);

@@ -861,10 +861,10 @@ class OrtValueSequence extends OrtValue {
     }
     final firstElementPtrPtr = calloc<ffi.Pointer<bg.OrtValue>>();
     final firstElementPtr = _getOrtValue(_ptr, 0, firstElementPtrPtr);
-    final onnxTypePtr = calloc<ffi.Int32>();
+    final onnxTypePtr = calloc<ffi.UnsignedInt>();
     statusPtr = OrtEnv.instance.ortApiPtr.ref.GetValueType.asFunction<
         bg.OrtStatusPtr Function(ffi.Pointer<bg.OrtValue>,
-            ffi.Pointer<ffi.Int32>)>()(firstElementPtr, onnxTypePtr);
+            ffi.Pointer<ffi.UnsignedInt>)>()(firstElementPtr, onnxTypePtr);
     OrtStatus.checkOrtStatus(statusPtr);
     _onnxType = ONNXType.valueOf(onnxTypePtr.value);
     if (_onnxType == ONNXType.tensor) {
@@ -999,11 +999,11 @@ class OrtValueSparseTensor extends OrtValue {
   OrtValueSparseTensor(ffi.Pointer<bg.OrtValue> ptr) {
     _ptr = ptr;
     _info = OrtTensorTypeAndShapeInfo(ptr);
-    final ortSparseFormatPtr = calloc<ffi.Int32>();
+    final ortSparseFormatPtr = calloc<ffi.UnsignedInt>();
     final statusPtr = OrtEnv.instance.ortApiPtr.ref.GetSparseTensorFormat
         .asFunction<
             bg.OrtStatusPtr Function(ffi.Pointer<bg.OrtValue>,
-                ffi.Pointer<ffi.Int32>)>()(ptr, ortSparseFormatPtr);
+                ffi.Pointer<ffi.UnsignedInt>)>()(ptr, ortSparseFormatPtr);
     OrtStatus.checkOrtStatus(statusPtr);
     _ortSparseFormat = OrtSparseFormat.valueOf(ortSparseFormatPtr.value);
     calloc.free(ortSparseFormatPtr);
@@ -1059,12 +1059,12 @@ class OrtTensorTypeAndShapeInfo {
 
   static ONNXTensorElementDataType _getTensorElementType(
       ffi.Pointer<bg.OrtTensorTypeAndShapeInfo> infoPtr) {
-    final onnxTensorElementDataTypePtr = calloc<ffi.Int32>();
+    final onnxTensorElementDataTypePtr = calloc<ffi.UnsignedInt>();
     final statusPtr = OrtEnv.instance.ortApiPtr.ref.GetTensorElementType
             .asFunction<
                 bg.OrtStatusPtr Function(
                     ffi.Pointer<bg.OrtTensorTypeAndShapeInfo>,
-                    ffi.Pointer<ffi.Int32>)>()(
+                    ffi.Pointer<ffi.UnsignedInt>)>()(
         infoPtr, onnxTensorElementDataTypePtr);
     OrtStatus.checkOrtStatus(statusPtr);
     final onnxTensorElementDataType = onnxTensorElementDataTypePtr.value;

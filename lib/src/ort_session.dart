@@ -37,16 +37,25 @@ class OrtSession {
   /// Creates a session from a file.
   OrtSession.fromFile(File modelFile, OrtSessionOptions options) {
     final pp = calloc<ffi.Pointer<bg.OrtSession>>();
-    final statusPtr = OrtEnv.instance.ortApiPtr.ref.CreateSession.asFunction<
-            bg.OrtStatusPtr Function(
-                ffi.Pointer<bg.OrtEnv>,
-                ffi.Pointer<ffi.Char>,
-                ffi.Pointer<bg.OrtSessionOptions>,
-                ffi.Pointer<ffi.Pointer<bg.OrtSession>>)>()(OrtEnv.instance.ptr,
-        modelFile.path.toNativeUtf8().cast<ffi.Char>(), options._ptr, pp);
-    OrtStatus.checkOrtStatus(statusPtr);
-    _ptr = pp.value;
-    calloc.free(pp);
+    // ORTCHAR_T is wchar_t (UTF-16) on Windows and char (UTF-8) elsewhere; the
+    // bindings are generated with the char shape (-U_WIN32), hence the cast.
+    final path = Platform.isWindows
+        ? modelFile.path.toNativeUtf16(allocator: calloc).cast<ffi.Char>()
+        : modelFile.path.toNativeUtf8(allocator: calloc).cast<ffi.Char>();
+    try {
+      OrtStatus.checkOrtStatus(OrtEnv.instance.ortApiPtr.ref.CreateSession
+          .asFunction<
+              bg.OrtStatusPtr Function(
+                  ffi.Pointer<bg.OrtEnv>,
+                  ffi.Pointer<ffi.Char>,
+                  ffi.Pointer<bg.OrtSessionOptions>,
+                  ffi.Pointer<ffi.Pointer<bg.OrtSession>>)>()(
+          OrtEnv.instance.ptr, path, options._ptr, pp));
+      _ptr = pp.value;
+    } finally {
+      calloc.free(path);
+      calloc.free(pp);
+    }
     _init();
   }
 
@@ -200,10 +209,10 @@ class OrtSession {
     OrtStatus.checkOrtStatus(statusPtr);
     final outputs = List<OrtValue?>.generate(outputLength, (index) {
       final ortValuePtr = outputPtrs[index];
-      final onnxTypePtr = calloc<ffi.Int32>();
+      final onnxTypePtr = calloc<ffi.UnsignedInt>();
       statusPtr = OrtEnv.instance.ortApiPtr.ref.GetValueType.asFunction<
           bg.OrtStatusPtr Function(ffi.Pointer<bg.OrtValue>,
-              ffi.Pointer<ffi.Int32>)>()(ortValuePtr, onnxTypePtr);
+              ffi.Pointer<ffi.UnsignedInt>)>()(ortValuePtr, onnxTypePtr);
       OrtStatus.checkOrtStatus(statusPtr);
       final onnxType = ONNXType.valueOf(onnxTypePtr.value);
       calloc.free(onnxTypePtr);
@@ -589,170 +598,188 @@ class OrtSessionOptions {
     OrtStatus.checkOrtStatus(statusPtr);
   }
 
-  bool _appendExecutionProvider(OrtProvider provider, OrtFlags flags) {
-    var result = false;
-    bg.OrtStatusPtr? statusPtr;
-    switch (provider) {
-      case OrtProvider.cpu:
-        statusPtr =
-            onnxRuntimeBinding.OrtSessionOptionsAppendExecutionProvider_CPU(
-                _ptr, flags.value);
-        result = true;
-        break;
-      case OrtProvider.coreml:
-        statusPtr =
-            onnxRuntimeBinding.OrtSessionOptionsAppendExecutionProvider_CoreML(
-                _ptr, flags.value);
-        result = true;
-        break;
-      case OrtProvider.nnapi:
-        statusPtr =
-            onnxRuntimeBinding.OrtSessionOptionsAppendExecutionProvider_Nnapi(
-                _ptr, flags.value);
-        result = true;
-        break;
-      case OrtProvider.cuda:
-        statusPtr =
-            onnxRuntimeBinding.OrtSessionOptionsAppendExecutionProvider_CUDA(
-                _ptr, flags.value);
-        result = true;
-        break;
-      case OrtProvider.rocm:
-        // ROCm uses the same pattern as CUDA but with ROCm bindings
-        // If binding is not available, gracefully fail
-        try {
-          statusPtr = onnxRuntimeBinding
-              .OrtSessionOptionsAppendExecutionProvider_MIGraphX(
-                  _ptr, flags.value);
-          result = true;
-        } catch (e) {
-          result = false;
-        }
-        break;
-      case OrtProvider.dnnl:
-        statusPtr =
-            onnxRuntimeBinding.OrtSessionOptionsAppendExecutionProvider_Dnnl(
-                _ptr, flags.value);
-        result = true;
-        break;
-      case OrtProvider.migraphx:
-        statusPtr = onnxRuntimeBinding
-            .OrtSessionOptionsAppendExecutionProvider_MIGraphX(
-                _ptr, flags.value);
-        result = true;
-        break;
-      default:
-        break;
-    }
-    OrtStatus.checkOrtStatus(statusPtr);
-    return result;
-  }
-
+  /// Appends a provider by name with key/value [providerOptions]
+  /// (generic `SessionOptionsAppendExecutionProvider`); ORT validates them.
   bool _appendExecutionProvider2(
       OrtProvider provider, Map<String, String> providerOptions) {
-    bg.OrtStatusPtr? statusPtr;
-    var providerName = '';
-    switch (provider) {
-      case OrtProvider.xnnpack:
-        providerName = 'XNNPACK';
-        break;
-      case OrtProvider.tensorrt:
-        providerName = 'NvTensorRtRtx';
-        break;
-      case OrtProvider.directml:
-        providerName = 'DML';
-        break;
-      case OrtProvider.openvino:
-        providerName = 'OpenVINO';
-        break;
-      case OrtProvider.cann:
-        providerName = 'CANN';
-        break;
-      default:
-        return false;
+    final providerName = switch (provider) {
+      OrtProvider.xnnpack => 'XNNPACK',
+      OrtProvider.qnn => 'QNN',
+      OrtProvider.directml => 'DML',
+      OrtProvider.openvino => 'OpenVINO',
+      OrtProvider.coreml => 'CoreML',
+      _ => null,
+    };
+    if (providerName == null) return false;
+    final entries = providerOptions.entries.toList();
+    final namePtr = providerName.toNativeUtf8(allocator: calloc);
+    final keys = calloc<ffi.Pointer<ffi.Char>>(entries.length);
+    final values = calloc<ffi.Pointer<ffi.Char>>(entries.length);
+    try {
+      for (var i = 0; i < entries.length; i++) {
+        keys[i] = entries[i].key.toNativeUtf8(allocator: calloc).cast();
+        values[i] = entries[i].value.toNativeUtf8(allocator: calloc).cast();
+      }
+      OrtStatus.checkOrtStatus(OrtEnv
+          .instance.ortApiPtr.ref.SessionOptionsAppendExecutionProvider
+          .asFunction<
+              bg.OrtStatusPtr Function(
+                  ffi.Pointer<bg.OrtSessionOptions>,
+                  ffi.Pointer<ffi.Char>,
+                  ffi.Pointer<ffi.Pointer<ffi.Char>>,
+                  ffi.Pointer<ffi.Pointer<ffi.Char>>,
+                  int)>()(
+          _ptr, namePtr.cast(), keys, values, entries.length));
+    } finally {
+      for (var i = 0; i < entries.length; i++) {
+        calloc.free(keys[i]);
+        calloc.free(values[i]);
+      }
+      calloc.free(keys);
+      calloc.free(values);
+      calloc.free(namePtr);
     }
-    final providerNamePtr = providerName.toNativeUtf8().cast<ffi.Char>();
-    var size = providerOptions.length;
-    final keyPtrPtr = calloc<ffi.Pointer<ffi.Char>>(size);
-    final valuePtrPtr = calloc<ffi.Pointer<ffi.Char>>(size);
-    var i = 0;
-    for (final entry in providerOptions.entries) {
-      keyPtrPtr[i] = entry.key.toNativeUtf8().cast<ffi.Char>();
-      valuePtrPtr[i] = entry.value.toNativeUtf8().cast<ffi.Char>();
-      ++i;
-    }
-    statusPtr = OrtEnv
-        .instance.ortApiPtr.ref.SessionOptionsAppendExecutionProvider
-        .asFunction<
-            bg.OrtStatusPtr Function(
-                ffi.Pointer<bg.OrtSessionOptions>,
-                ffi.Pointer<ffi.Char>,
-                ffi.Pointer<ffi.Pointer<ffi.Char>>,
-                ffi.Pointer<ffi.Pointer<ffi.Char>>,
-                int)>()(_ptr, providerNamePtr, keyPtrPtr, valuePtrPtr, size);
-    OrtStatus.checkOrtStatus(statusPtr);
-    calloc.free(keyPtrPtr);
-    calloc.free(valuePtrPtr);
     return true;
+  }
+
+  /// Appends a provider through an ORT-managed options object: create, update
+  /// with [options] as documented key/value strings, append, release.
+  /// ORT validates the keys and values. Used by the V2 providers and ROCm.
+  bool _appendV2<T extends ffi.NativeType>(
+    Map<String, String>? options,
+    bg.OrtStatusPtr Function(ffi.Pointer<ffi.Pointer<T>>) create,
+    bg.OrtStatusPtr Function(ffi.Pointer<T>, ffi.Pointer<ffi.Pointer<ffi.Char>>,
+            ffi.Pointer<ffi.Pointer<ffi.Char>>, int)
+        update,
+    bg.OrtStatusPtr Function(ffi.Pointer<bg.OrtSessionOptions>, ffi.Pointer<T>)
+        append,
+    void Function(ffi.Pointer<T>) release,
+  ) {
+    // calloc needs a concrete type, so allocate a void** and cast.
+    final outPtr = calloc<ffi.Pointer<ffi.Void>>();
+    final ffi.Pointer<T> providerOptions;
+    try {
+      OrtStatus.checkOrtStatus(create(outPtr.cast()));
+      providerOptions = outPtr.value.cast();
+    } finally {
+      calloc.free(outPtr);
+    }
+    final entries = (options ?? const {}).entries.toList();
+    final keys = calloc<ffi.Pointer<ffi.Char>>(entries.length);
+    final values = calloc<ffi.Pointer<ffi.Char>>(entries.length);
+    try {
+      for (var i = 0; i < entries.length; i++) {
+        keys[i] = entries[i].key.toNativeUtf8(allocator: calloc).cast();
+        values[i] = entries[i].value.toNativeUtf8(allocator: calloc).cast();
+      }
+      OrtStatus.checkOrtStatus(
+          update(providerOptions, keys, values, entries.length));
+      OrtStatus.checkOrtStatus(append(_ptr, providerOptions));
+    } finally {
+      for (var i = 0; i < entries.length; i++) {
+        calloc.free(keys[i]);
+        calloc.free(values[i]);
+      }
+      calloc.free(keys);
+      calloc.free(values);
+      release(providerOptions);
+    }
+    return true;
+  }
+
+  /// Applies documented key/value [options] to a V1 options struct through
+  /// [setters]; unknown keys throw instead of being silently ignored.
+  static void _setV1Options(String provider, Map<String, String>? options,
+      Map<String, void Function(String)> setters) {
+    for (final MapEntry(:key, :value) in (options ?? const {}).entries) {
+      final set = setters[key];
+      if (set == null) {
+        throw ArgumentError.value(key, 'options',
+            'Unknown $provider option. Known: ${setters.keys.join(', ')}');
+      }
+      try {
+        set(value);
+      } on ArgumentError catch (e) {
+        throw ArgumentError.value(value, key, '$provider option: ${e.message}');
+      }
+    }
+  }
+
+  /// Parses an option stored in a C `int` (32-bit on every ORT target);
+  /// accepts `true`/`false` for flags.
+  static int _intOption(String value) {
+    final parsed = switch (value) {
+      'true' => 1,
+      'false' => 0,
+      _ => int.tryParse(value),
+    };
+    if (parsed == null || parsed < -0x80000000 || parsed > 0x7fffffff) {
+      throw ArgumentError('expected a 32-bit integer, true or false');
+    }
+    return parsed;
   }
 
   /// Appends cpu provider.
   bool appendCPUProvider(CPUFlags flags) {
-    return _appendExecutionProvider(OrtProvider.cpu, flags);
+    OrtStatus.checkOrtStatus(onnxRuntimeBinding
+        .OrtSessionOptionsAppendExecutionProvider_CPU(_ptr, flags.value));
+    return true;
   }
 
   /// Appends CoreML provider (Apple Neural Engine/GPU acceleration).
   /// Best for iOS/macOS devices with Apple Silicon or A-series chips.
-  bool appendCoreMLProvider(CoreMLFlags flags) {
-    return _appendExecutionProvider(OrtProvider.coreml, flags);
+  ///
+  /// [options] are the documented CoreML provider options, e.g.
+  /// `{'ModelFormat': 'MLProgram', 'MLComputeUnits': 'ALL',
+  /// 'ModelCacheDirectory': cacheDir}`.
+  /// Keys accepted by ONNX Runtime 1.22: doc/providers/coreml.md
+  bool appendCoreMLProvider([Map<String, String>? options]) {
+    return _appendExecutionProvider2(OrtProvider.coreml, options ?? {});
   }
 
   /// Appends Nnapi provider (Android Neural Networks API).
   /// Google's Android acceleration - works on Android 8.1+.
-  bool appendNnapiProvider(NnapiFlags flags) {
-    return _appendExecutionProvider(OrtProvider.nnapi, flags);
+  ///
+  /// [flags] are combined into ONNX Runtime's NNAPI bitmask, e.g.
+  /// `{NnapiFlags.useFp16, NnapiFlags.useNCHW}`; empty means defaults.
+  bool appendNnapiProvider([Set<NnapiFlags> flags = const {}]) {
+    final bits = flags.fold(0, (bits, flag) => bits | flag.value);
+    OrtStatus.checkOrtStatus(onnxRuntimeBinding
+        .OrtSessionOptionsAppendExecutionProvider_Nnapi(_ptr, bits));
+    return true;
   }
 
   /// Appends CUDA provider (NVIDIA GPU acceleration).
   /// Requires NVIDIA GPU with CUDA runtime installed.
   /// Typically 5-10x faster than CPU for deep learning workloads.
-  bool appendCudaProvider(CUDAFlags flags) {
-    return _appendExecutionProvider(OrtProvider.cuda, flags);
+  ///
+  /// [options] are the documented CUDA provider options, e.g.
+  /// `{'device_id': '0', 'enable_cuda_graph': '1'}`.
+  /// Keys accepted by ONNX Runtime 1.22: doc/providers/cuda.md
+  bool appendCudaProvider([Map<String, String>? options]) {
+    return _appendV2<bg.OrtCUDAProviderOptionsV2>(
+        options,
+        OrtEnv.instance.ortApiPtr.ref.CreateCUDAProviderOptions.asFunction(),
+        OrtEnv.instance.ortApiPtr.ref.UpdateCUDAProviderOptions.asFunction(),
+        OrtEnv.instance.ortApiPtr.ref.SessionOptionsAppendExecutionProvider_CUDA_V2.asFunction(),
+        OrtEnv.instance.ortApiPtr.ref.ReleaseCUDAProviderOptions.asFunction());
   }
 
   /// Appends TensorRT provider (NVIDIA GPU with optimizations).
   /// Requires NVIDIA GPU with TensorRT runtime installed.
   /// Can be 2-5x faster than raw CUDA with additional optimizations.
   /// Supports FP16 and INT8 quantization for even faster inference.
-  // bool appendTensorRTProvider([Map<String, String>? options]) {
-  //   return _appendExecutionProvider2(OrtProvider.tensorrt, options ?? {});
-  // }
-
-  bool appendTensorRTProvider([int deviceId = 0, String? cachePath]) {
-    final trtOptions = calloc<bg.OrtTensorRTProviderOptions>();
-    trtOptions.ref.device_id = deviceId;
-    trtOptions.ref.trt_max_workspace_size = 4 * (1 << 30);
-    trtOptions.ref.trt_max_partition_iterations = 1000;
-    trtOptions.ref.trt_min_subgraph_size = 1;
-    trtOptions.ref.trt_fp16_enable = 1;
-    trtOptions.ref.trt_int8_enable = 0;
-    trtOptions.ref.trt_engine_cache_enable = 1;
-    trtOptions.ref.trt_dump_subgraphs = 1;
-    // Set cache path
-    final cacheDir = cachePath ?? './trt_engine_cache';
-    trtOptions.ref.trt_engine_cache_path =
-        cacheDir.toNativeUtf8().cast<ffi.Char>();
-
-    final statusPtr =
-        OrtEnv.instance.ortApiPtr.ref
-                .SessionOptionsAppendExecutionProvider_TensorRT
-                .asFunction<
-                    bg.OrtStatusPtr Function(ffi.Pointer<bg.OrtSessionOptions>,
-                        ffi.Pointer<bg.OrtTensorRTProviderOptions>)>()(
-            _ptr, trtOptions);
-    calloc.free(trtOptions);
-    OrtStatus.checkOrtStatus(statusPtr);
-    return true;
+  ///
+  /// [options] are the documented TensorRT provider options, e.g.
+  /// `{'trt_fp16_enable': '1', 'trt_engine_cache_enable': '1'}`.
+  /// Keys accepted by ONNX Runtime 1.22: doc/providers/tensorrt.md
+  bool appendTensorRTProvider([Map<String, String>? options]) {
+    return _appendV2<bg.OrtTensorRTProviderOptionsV2>(
+        options,
+        OrtEnv.instance.ortApiPtr.ref.CreateTensorRTProviderOptions.asFunction(),
+        OrtEnv.instance.ortApiPtr.ref.UpdateTensorRTProviderOptions.asFunction(),
+        OrtEnv.instance.ortApiPtr.ref.SessionOptionsAppendExecutionProvider_TensorRT_V2.asFunction(),
+        OrtEnv.instance.ortApiPtr.ref.ReleaseTensorRTProviderOptions.asFunction());
   }
 
   /// Appends DirectML provider (DirectX 12 GPU acceleration).
@@ -764,8 +791,19 @@ class OrtSessionOptions {
 
   /// Appends ROCm provider (AMD GPU acceleration).
   /// Requires AMD GPU with ROCm runtime installed (Linux only).
-  bool appendRocmProvider(ROCmFlags flags) {
-    return _appendExecutionProvider(OrtProvider.rocm, flags);
+  ///
+  /// [options] are the documented ROCm provider options, e.g.
+  /// `{'device_id': '0', 'gpu_mem_limit': '2147483648'}`.
+  /// Keys accepted by ONNX Runtime 1.22: doc/providers/rocm.md
+  /// ROCm keeps its V1 struct, but ORT fills it from the map through
+  /// Create/UpdateROCMProviderOptions (since 1.16), same flow as V2.
+  bool appendRocmProvider([Map<String, String>? options]) {
+    return _appendV2<bg.OrtROCMProviderOptions>(
+        options,
+        OrtEnv.instance.ortApiPtr.ref.CreateROCMProviderOptions.asFunction(),
+        OrtEnv.instance.ortApiPtr.ref.UpdateROCMProviderOptions.asFunction(),
+        OrtEnv.instance.ortApiPtr.ref.SessionOptionsAppendExecutionProvider_ROCM.asFunction(),
+        OrtEnv.instance.ortApiPtr.ref.ReleaseROCMProviderOptions.asFunction());
   }
 
   /// Appends OpenVINO provider (Intel hardware optimization).
@@ -778,20 +816,80 @@ class OrtSessionOptions {
   /// Appends DNNL provider (Intel Deep Neural Network Library).
   /// Optimized CPU operations for Intel processors.
   /// Good CPU performance boost on Intel hardware.
-  bool appendDNNLProvider(DNNLFlags flags) {
-    return _appendExecutionProvider(OrtProvider.dnnl, flags);
+  ///
+  /// [options] are the documented oneDNN provider options, e.g.
+  /// `{'use_arena': '1'}`.
+  bool appendDNNLProvider([Map<String, String>? options]) {
+    return _appendV2<bg.OrtDnnlProviderOptions>(
+        options,
+        OrtEnv.instance.ortApiPtr.ref.CreateDnnlProviderOptions.asFunction(),
+        OrtEnv.instance.ortApiPtr.ref.UpdateDnnlProviderOptions.asFunction(),
+        OrtEnv.instance.ortApiPtr.ref.SessionOptionsAppendExecutionProvider_Dnnl.asFunction(),
+        OrtEnv.instance.ortApiPtr.ref.ReleaseDnnlProviderOptions.asFunction());
   }
 
   /// Appends MIGraphX provider (AMD graph optimization).
   /// AMD's graph-level optimizations for their GPUs.
-  bool appendMIGraphXProvider(MIGraphXFlags flags) {
-    return _appendExecutionProvider(OrtProvider.migraphx, flags);
+  ///
+  /// [options] are the documented MIGraphX provider options, e.g.
+  /// `{'device_id': '0', 'migraphx_fp16_enable': '1'}`.
+  /// Keys accepted by ONNX Runtime 1.22: doc/providers/migraphx.md
+  /// MIGraphX only has the V1 options struct, so the keys are mapped here.
+  bool appendMIGraphXProvider([Map<String, String>? options]) {
+    final migraphx = calloc<bg.OrtMIGraphXProviderOptions>();
+    final strings = <ffi.Pointer<Utf8>>[];
+    ffi.Pointer<ffi.Char> str(String v) {
+      final p = v.toNativeUtf8(allocator: calloc);
+      strings.add(p);
+      return p.cast();
+    }
+
+    try {
+      final m = migraphx.ref;
+      _setV1Options('MIGraphX', options, {
+        'device_id': (v) => m.device_id = _intOption(v),
+        'migraphx_fp16_enable': (v) => m.migraphx_fp16_enable = _intOption(v),
+        'migraphx_int8_enable': (v) => m.migraphx_int8_enable = _intOption(v),
+        'migraphx_use_native_calibration_table': (v) =>
+            m.migraphx_use_native_calibration_table = _intOption(v),
+        'migraphx_int8_calibration_table_name': (v) =>
+            m.migraphx_int8_calibration_table_name = str(v),
+        'migraphx_save_compiled_model': (v) =>
+            m.migraphx_save_compiled_model = _intOption(v),
+        'migraphx_save_model_path': (v) => m.migraphx_save_model_path = str(v),
+        'migraphx_load_compiled_model': (v) =>
+            m.migraphx_load_compiled_model = _intOption(v),
+        'migraphx_load_model_path': (v) => m.migraphx_load_model_path = str(v),
+        'migraphx_exhaustive_tune': (v) =>
+            m.migraphx_exhaustive_tune = _intOption(v) != 0,
+      });
+      OrtStatus.checkOrtStatus(OrtEnv.instance.ortApiPtr.ref
+          .SessionOptionsAppendExecutionProvider_MIGraphX
+          .asFunction<
+              bg.OrtStatusPtr Function(ffi.Pointer<bg.OrtSessionOptions>,
+                  ffi.Pointer<bg.OrtMIGraphXProviderOptions>)>()(
+          _ptr, migraphx));
+    } finally {
+      for (final p in strings) {
+        calloc.free(p);
+      }
+      calloc.free(migraphx);
+    }
+    return true;
   }
 
   /// Appends CANN provider (Huawei Ascend AI processor).
   /// Optimized for Huawei Ascend NPUs.
+  ///
+  /// [options] are the documented CANN provider options, e.g.
+  /// `{'device_id': '0'}`.
   bool appendCANNProvider([Map<String, String>? options]) {
-    return _appendExecutionProvider2(OrtProvider.cann, options ?? {});
+    return _appendV2<bg.OrtCANNProviderOptions>(
+        options,
+        OrtEnv.instance.ortApiPtr.ref.CreateCANNProviderOptions.asFunction(),
+        OrtEnv.instance.ortApiPtr.ref.UpdateCANNProviderOptions.asFunction(),
+        OrtEnv.instance.ortApiPtr.ref.SessionOptionsAppendExecutionProvider_CANN.asFunction(),
+        OrtEnv.instance.ortApiPtr.ref.ReleaseCANNProviderOptions.asFunction());
   }
 
   /// Appends QNN provider (Qualcomm Neural Network).
@@ -809,9 +907,9 @@ class OrtSessionOptions {
 
   /// Automatically selects and appends the best available execution provider.
   ///
-  /// **Priority order:**
-  /// 1. **GPU**: CUDA/TensorRT (NVIDIA) > DirectML (Windows) > ROCm (AMD)
-  /// 2. **NPU/Accelerators**: CoreML (Apple) > NNAPI (Android) > QNN (Qualcomm)
+  /// **Order tried:**
+  /// 1. **NPU/Accelerators**: CoreML (Apple) > NNAPI (Android) > QNN (Qualcomm)
+  /// 2. **GPU**: CUDA (NVIDIA) > DirectML (Windows) > ROCm (AMD)
   /// 3. **Optimized CPU**: DNNL (Intel) > XNNPACK (cross-platform)
   /// 4. **Fallback**: Standard CPU
   ///
@@ -835,7 +933,7 @@ class OrtSessionOptions {
     // CoreML for Apple devices (Neural Engine)
     if (!hasProvider) {
       try {
-        if (appendCoreMLProvider(CoreMLFlags.useNone)) {
+        if (appendCoreMLProvider()) {
           hasProvider = true;
         }
       } catch (e) {
@@ -846,7 +944,7 @@ class OrtSessionOptions {
     // NNAPI for Android (Google's acceleration)
     if (!hasProvider) {
       try {
-        if (appendNnapiProvider(NnapiFlags.useNone)) {
+        if (appendNnapiProvider()) {
           hasProvider = true;
         }
       } catch (e) {
@@ -869,7 +967,7 @@ class OrtSessionOptions {
     // CUDA/TensorRT for NVIDIA
     if (!hasProvider) {
       try {
-        if (appendCudaProvider(CUDAFlags.useNone)) {
+        if (appendCudaProvider()) {
           hasProvider = true;
         }
       } catch (e) {
@@ -891,7 +989,7 @@ class OrtSessionOptions {
     // ROCm for AMD GPUs on Linux
     if (!hasProvider) {
       try {
-        if (appendRocmProvider(ROCmFlags.useArena)) {
+        if (appendRocmProvider()) {
           hasProvider = true;
         }
       } catch (e) {
@@ -903,7 +1001,7 @@ class OrtSessionOptions {
     // DNNL for Intel CPUs
     if (!hasProvider) {
       try {
-        if (appendDNNLProvider(DNNLFlags.useArena)) {
+        if (appendDNNLProvider()) {
           hasProvider = true;
         }
       } catch (e) {
