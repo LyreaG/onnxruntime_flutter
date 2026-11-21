@@ -67,7 +67,7 @@ even without cuDNN, and only fails when you append it.
 
 | Platform | Providers in the bundled ONNX Runtime 1.22 | Extra requirements |
 |---|---|---|
-| Windows x64 | CPU, CUDA, TensorRT (both tested on an RTX 4070) | CUDA: [cuDNN 9](https://developer.nvidia.com/cudnn) for CUDA 12 on `PATH`. TensorRT: also TensorRT 10.9, and models with fixed shapes. |
+| Windows x64 | CPU, CUDA, TensorRT (both tested on an RTX 4070) | CUDA: [cuDNN 9](https://developer.nvidia.com/cudnn) for CUDA 12 on `PATH`. TensorRT: also TensorRT 10.9, and models with fixed shapes. [Setup guide](gpu_setup.md) |
 | Linux | CPU, CUDA, TensorRT *(not verified)* | as Windows |
 | Android | CPU, NNAPI, XNNPACK *(not verified)* | |
 | iOS | CPU, CoreML, XNNPACK (standard `onnxruntime-objc` pod) | |

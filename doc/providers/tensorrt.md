@@ -8,7 +8,7 @@ building the engine can take seconds to minutes, so cache it.
 |---|---|
 | Platforms | Windows x64, Linux |
 | In the bundled binaries | Windows: yes. Linux: yes *(not verified)* |
-| Requirements | everything [CUDA](cuda.md) needs, plus **TensorRT 10.9** for CUDA 12 (the version ONNX Runtime 1.22 is built against) with its `lib` folder on `PATH`, and a model with **fixed input shapes** (see notes) |
+| Requirements | everything [CUDA](cuda.md) needs, plus **TensorRT 10.9** for CUDA 12 (the version ONNX Runtime 1.22 is built against) with its `lib` folder on `PATH`, and a model with **fixed input shapes** (see notes). Step by step: [GPU setup](../gpu_setup.md) |
 | Method | `appendTensorRTProvider([Map<String, String>? options])` |
 | How options reach ONNX Runtime | ONNX Runtime's TensorRT V2 options object: created with ORT's defaults, then your map is applied by `UpdateTensorRTProviderOptions`, which rejects unknown keys |
 | 1.22 source | keys: [`tensorrt_execution_provider_info.cc`](https://github.com/syntax-syndicate/onnxruntime/blob/v1.22.0/onnxruntime/core/providers/tensorrt/tensorrt_execution_provider_info.cc) · meanings and defaults: [`tensorrt_provider_options.h`](https://github.com/syntax-syndicate/onnxruntime/blob/v1.22.0/include/onnxruntime/core/providers/tensorrt/tensorrt_provider_options.h) |

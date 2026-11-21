@@ -8,7 +8,7 @@ longer to start.
 |---|---|
 | Platforms | Windows x64, Linux |
 | In the bundled binaries | Windows: yes. Linux: yes *(not verified)* |
-| Requirements | NVIDIA GPU and driver, [cuDNN 9](https://developer.nvidia.com/cudnn) for CUDA 12 with its `bin` folder on `PATH` (or its DLLs next to the app) |
+| Requirements | NVIDIA GPU and driver, [cuDNN 9](https://developer.nvidia.com/cudnn) for CUDA 12 with its `bin` folder on `PATH` (or its DLLs next to the app). Step by step: [GPU setup](../gpu_setup.md) |
 | Method | `appendCudaProvider([Map<String, String>? options])` |
 | How options reach ONNX Runtime | ONNX Runtime's CUDA V2 options object: created with ORT's defaults, then your map is applied by `UpdateCUDAProviderOptions`, which rejects unknown keys |
 | 1.22 source | keys: [`cuda_execution_provider_info.cc`](https://github.com/syntax-syndicate/onnxruntime/blob/v1.22.0/onnxruntime/core/providers/cuda/cuda_execution_provider_info.cc) · defaults: [`cuda_provider_options.h`](https://github.com/syntax-syndicate/onnxruntime/blob/v1.22.0/include/onnxruntime/core/providers/cuda/cuda_provider_options.h) |
