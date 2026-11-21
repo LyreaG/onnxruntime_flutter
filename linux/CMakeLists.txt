@@ -4,7 +4,7 @@
 cmake_minimum_required(VERSION 3.10)
 
 # Project-level configuration.
-set(PROJECT_NAME "onnxruntime_v2")
+set(PROJECT_NAME "onnxruntime_flutter")
 project(${PROJECT_NAME} LANGUAGES CXX)
 
 # Download ONNX Runtime libraries from official Microsoft release if not present
@@ -39,7 +39,7 @@ endif()
 # Includes GPU-enabled library for CUDA, TensorRT, and ROCm acceleration.
 # The GPU library is optional - if CUDA/ROCm runtime is not available,
 # ONNX Runtime will gracefully fall back to CPU execution.
-set(onnxruntime_v2_bundled_libraries
+set(onnxruntime_flutter_bundled_libraries
   "${CMAKE_CURRENT_SOURCE_DIR}/libonnxruntime.so.1.22.0"
   "${CMAKE_CURRENT_SOURCE_DIR}/libonnxruntime_providers_cuda.so"
   "${CMAKE_CURRENT_SOURCE_DIR}/libonnxruntime_providers_shared.so"

@@ -5,7 +5,7 @@
 cmake_minimum_required(VERSION 3.14)
 
 # Project-level configuration.
-set(PROJECT_NAME "onnxruntime_v2")
+set(PROJECT_NAME "onnxruntime_flutter")
 project(${PROJECT_NAME} LANGUAGES CXX)
 
 # Download ONNX Runtime libraries from official Microsoft release if not present
@@ -40,7 +40,7 @@ endif()
 # Includes GPU provider DLLs for CUDA, TensorRT, and DirectML acceleration.
 # These DLLs are optional - if the GPU runtime is not available on the target
 # system, ONNX Runtime will gracefully fall back to CPU execution.
-set(onnxruntime_v2_bundled_libraries
+set(onnxruntime_flutter_bundled_libraries
   "${CMAKE_CURRENT_SOURCE_DIR}/onnxruntime.dll"
   "${CMAKE_CURRENT_SOURCE_DIR}/onnxruntime_providers_cuda.dll"
   "${CMAKE_CURRENT_SOURCE_DIR}/onnxruntime_providers_shared.dll"

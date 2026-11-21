@@ -42,7 +42,7 @@ dependencies:
 ### Import
 
 ```dart
-import 'package:onnxruntime_v2/onnxruntime_v2.dart';
+import 'package:onnxruntime_flutter/onnxruntime_flutter.dart';
 ```
 
 ### Initializing environment
