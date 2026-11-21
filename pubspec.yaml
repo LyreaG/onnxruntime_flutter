@@ -1,4 +1,4 @@
-name: onnxruntime_v2
+name: onnxruntime_flutter
 description: Flutter plugin for OnnxRuntime provides an easy, flexible, and fast Dart API to integrate Onnx models in flutter apps across mobile and desktop platforms.
 version: 1.23.2+2
 homepage: https://github.com/Persie0/onnxruntime_flutter_1_22_0

@@ -37,7 +37,7 @@ Write-Host "ONNX Runtime libraries not found. Downloading from Artifactory..."
 
 # Create temp directory. Outside $SCRIPT_DIR: Flutter reaches the plugin through
 # .plugin_symlinks, and tar.exe refuses to extract through a symlink.
-$TEMP_DIR = Join-Path ([System.IO.Path]::GetTempPath()) "onnxruntime_v2_download"
+$TEMP_DIR = Join-Path ([System.IO.Path]::GetTempPath()) "onnxruntime_flutter_download"
 if (Test-Path $TEMP_DIR) {
     Remove-Item -Recurse -Force $TEMP_DIR
 }
