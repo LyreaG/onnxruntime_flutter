@@ -200,10 +200,10 @@ class OrtSession {
     OrtStatus.checkOrtStatus(statusPtr);
     final outputs = List<OrtValue?>.generate(outputLength, (index) {
       final ortValuePtr = outputPtrs[index];
-      final onnxTypePtr = calloc<ffi.Int32>();
+      final onnxTypePtr = calloc<ffi.UnsignedInt>();
       statusPtr = OrtEnv.instance.ortApiPtr.ref.GetValueType.asFunction<
           bg.OrtStatusPtr Function(ffi.Pointer<bg.OrtValue>,
-              ffi.Pointer<ffi.Int32>)>()(ortValuePtr, onnxTypePtr);
+              ffi.Pointer<ffi.UnsignedInt>)>()(ortValuePtr, onnxTypePtr);
       OrtStatus.checkOrtStatus(statusPtr);
       final onnxType = ONNXType.valueOf(onnxTypePtr.value);
       calloc.free(onnxTypePtr);

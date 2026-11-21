@@ -11,19 +11,31 @@ headers:
     - 'src/onnxruntime/cpu_provider_factory.h'
     - 'src/onnxruntime/nnapi_provider_factory.h'
     - 'src/onnxruntime/onnxruntime_c_api.h'
-    - 'src/onnxruntime/onnxruntime_cxx_api.h'
-    - 'src/onnxruntime/onnxruntime_cxx_inline.h'
   include-directives:
     - 'src/onnxruntime/coreml_provider_factory.h'
     - 'src/onnxruntime/cpu_provider_factory.h'
     - 'src/onnxruntime/nnapi_provider_factory.h'
     - 'src/onnxruntime/onnxruntime_c_api.h'
-    - 'src/onnxruntime/onnxruntime_cxx_api.h'
-    - 'src/onnxruntime/onnxruntime_cxx_inline.h'
+# Generate the non-Windows shape (ORTCHAR_T = char) on every host, so the
+# bindings don't change with the machine that runs ffigen.
+compiler-opts:
+  - '-U_WIN32'
+# C enums are 4-byte ints on all ORT targets.
+silence-enum-warning: true
+# ORT_FILE expands to __FILE__, i.e. a path on the machine running ffigen.
+macros:
+  exclude:
+    - 'ORT_FILE'
+# Keep C enums as int constants; the hand-written code compares raw ints.
+enums:
+  as-int:
+    include:
+      - '.*'
 preamble: |
   // ignore_for_file: always_specify_types
   // ignore_for_file: camel_case_types
   // ignore_for_file: non_constant_identifier_names
+  // ignore_for_file: unused_field
 comments:
   style: any
   length: full
