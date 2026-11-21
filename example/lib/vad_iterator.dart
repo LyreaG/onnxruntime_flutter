@@ -22,6 +22,10 @@ class VadIterator {
   var _triggered = false;
   var _tempEnd = 0;
   var _currentSample = 0;
+  double? _speechStart;
+
+  /// Detected speech segments, e.g. `3.072-3.584s`.
+  final segments = <String>[];
 
   static const int _batch = 1;
   /// model inputs
@@ -34,20 +38,22 @@ class VadIterator {
     _speechPadSamples = srPerMs * _speechPadMs;
     _windowSizeSamples = srPerMs * _frameSize;
     OrtEnv.instance.init();
-    OrtEnv.instance.availableProviders().forEach((element) {
-      print('onnx provider=$element');
-    });
+    for (final provider in OrtEnv.instance.availableProviders()) {
+      print('onnx provider=$provider');
+    }
   }
 
-  reset() {
+  void reset() {
     _triggered = false;
+    _speechStart = null;
+    segments.clear();
     _tempEnd = 0;
     _currentSample = 0;
     _hide = List.filled(2, List.filled(_batch, Float32List.fromList(List.filled(64, 0.0))));
     _cell = List.filled(2, List.filled(_batch, Float32List.fromList(List.filled(64, 0.0))));
   }
 
-  release() {
+  void release() {
     _sessionOptions?.release();
     _sessionOptions = null;
     _session?.release();
@@ -55,7 +61,7 @@ class VadIterator {
     OrtEnv.instance.release();
   }
 
-  initModel() async {
+  Future<void> initModel() async {
     _sessionOptions = OrtSessionOptions()
       ..setInterOpNumThreads(1)
       ..setIntraOpNumThreads(1)
@@ -122,7 +128,8 @@ class VadIterator {
       _triggered = true;
       /// minus window_size_samples to get precise start time point.
       final speechStart = _currentSample - _windowSizeSamples - _speechPadSamples;
-      print('vad start: ${speechStart / _sampleRate}s');
+      _speechStart = speechStart / _sampleRate;
+      print('vad start: ${_speechStart}s');
     }
 
     /// 4) End
@@ -139,7 +146,8 @@ class VadIterator {
         final speechEnd = _tempEnd > 0 ? _tempEnd + _speechPadSamples : _currentSample + _speechPadSamples;
         _tempEnd = 0;
         _triggered = false;
-        print('vad end: ${speechEnd / _sampleRate}s');
+        segments.add('$_speechStart-${speechEnd / _sampleRate}s');
+      print('vad end: ${speechEnd / _sampleRate}s');
       }
     }
     return _triggered;

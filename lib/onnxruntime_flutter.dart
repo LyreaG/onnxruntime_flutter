@@ -1,4 +1,4 @@
-library onnxruntime_flutter;
+library;
 
 export 'src/ort_env.dart';
 export 'src/ort_provider.dart';

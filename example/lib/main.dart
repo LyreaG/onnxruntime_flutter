@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:onnxruntime_flutter/onnxruntime_flutter.dart';
 import 'model_type_test.dart';
@@ -19,6 +19,7 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   late String _version;
+  String _result = '';
   VadIterator? _vadIterator;
   static const frameSize = 64;
   static const sampleRate = 16000;
@@ -28,7 +29,9 @@ class _MyAppState extends State<MyApp> {
     super.initState();
     _version = OrtEnv.version;
     _vadIterator = VadIterator(frameSize, sampleRate);
-    _vadIterator?.initModel();
+    _vadIterator?.initModel().then((_) {
+      if (mounted) setState(() => _result = 'Ready');
+    });
   }
 
   @override
@@ -76,6 +79,15 @@ class _MyAppState extends State<MyApp> {
                       _vad(true);
                     },
                     child: const Text('VAD Concurrency')),
+                const SizedBox(
+                  height: 50,
+                ),
+                Text(
+                  _result,
+                  key: const ValueKey('result'),
+                  style: textStyle,
+                  textAlign: TextAlign.center,
+                ),
               ],
             ),
           ),
@@ -84,53 +96,50 @@ class _MyAppState extends State<MyApp> {
     );
   }
 
-  _typeTest() async {
-    final startTime = DateTime.now().millisecondsSinceEpoch;
-    List<OrtValue?>? outputs;
-    outputs = await ModelTypeTest.testBool();
-    print('out=${outputs[0]?.value}');
-    outputs.forEach((element) {
-      element?.release();
-    });
-    outputs = await ModelTypeTest.testFloat();
-    print('out=${outputs[0]?.value}');
-    outputs.forEach((element) {
-      element?.release();
-    });
-    outputs = await ModelTypeTest.testInt64();
-    print('out=${outputs[0]?.value}');
-    outputs.forEach((element) {
-      element?.release();
-    });
-    outputs = await ModelTypeTest.testString();
-    print('out=${outputs[0]?.value}');
-    outputs.forEach((element) {
-      element?.release();
-    });
-    final endTime = DateTime.now().millisecondsSinceEpoch;
-    print('infer cost time=${endTime - startTime}ms');
+  Future<void> _typeTest() async {
+    setState(() => _result = 'Running...');
+    final stopwatch = Stopwatch()..start();
+    final values = <String>[];
+    for (final test in [
+      ModelTypeTest.testBool,
+      ModelTypeTest.testFloat,
+      ModelTypeTest.testInt64,
+      ModelTypeTest.testString,
+    ]) {
+      final outputs = await test();
+      values.add('${outputs[0]?.value}');
+      print('out=${values.last}');
+      for (final element in outputs) {
+        element?.release();
+      }
+    }
+    print('infer cost time=${stopwatch.elapsedMilliseconds}ms');
+    setState(() => _result =
+        'Type test done in ${stopwatch.elapsedMilliseconds}ms\n${values.join('\n')}');
   }
 
-  _vad(bool concurrent) async {
+  Future<void> _vad(bool concurrent) async {
+    setState(() => _result = 'Running...');
     const windowByteCount = frameSize * 2 * sampleRate ~/ 1000;
     final rawAssetFile = await rootBundle.load('assets/audio/vad_example.pcm');
     final bytes = rawAssetFile.buffer.asUint8List();
     var start = 0;
     var end = start + windowByteCount;
-    List<int> frameBuffer;
-    final startTime = DateTime.now().millisecondsSinceEpoch;
+    final stopwatch = Stopwatch()..start();
     while (end <= bytes.length) {
-      frameBuffer = bytes.sublist(start, end).toList();
-      final floatBuffer =
-          _transformBuffer(frameBuffer).map((e) => e / 32768).toList();
+      final floatBuffer = _transformBuffer(bytes.sublist(start, end))
+          .map((e) => e / 32768)
+          .toList();
       await _vadIterator?.predict(
           Float32List.fromList(floatBuffer), concurrent);
       start += windowByteCount;
       end = start + windowByteCount;
     }
+    final segments = _vadIterator?.segments.join(', ') ?? '';
     _vadIterator?.reset();
-    final endTime = DateTime.now().millisecondsSinceEpoch;
-    print('vad cost time=${endTime - startTime}ms');
+    print('vad cost time=${stopwatch.elapsedMilliseconds}ms');
+    setState(() => _result =
+        'VAD done in ${stopwatch.elapsedMilliseconds}ms\nSpeech: $segments');
   }
 
   Int16List _transformBuffer(List<int> buffer) {
