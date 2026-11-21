@@ -46,3 +46,15 @@ set(onnxruntime_flutter_bundled_libraries
   "${CMAKE_CURRENT_SOURCE_DIR}/libonnxruntime_providers_tensorrt.so"
   PARENT_SCOPE
 )
+
+# Flutter's Linux engine (libflutter_linux_gtk.so) exports its own C++
+# exception unwinder (_Unwind_RaiseException) and, as the app's first
+# dependency, overrides the system one for every library in the process. It
+# can't unwind through ONNX Runtime, so exceptions ORT throws and catches
+# internally (e.g. when the CUDA provider can't load, or a model is invalid)
+# abort the app instead of becoming errors. Make the system unwinder (libgcc_s)
+# the app's first dependency so it wins.
+if(DEFINED BINARY_NAME AND TARGET ${BINARY_NAME} AND COMMAND target_link_options)
+  target_link_options(${BINARY_NAME} BEFORE PRIVATE
+    "LINKER:--push-state,--no-as-needed,-lgcc_s,--pop-state")
+endif()
