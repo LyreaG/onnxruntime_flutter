@@ -19,7 +19,7 @@ def download_onnxruntime
 
   puts "📦 ONNX Runtime library not found. Downloading from Microsoft releases..."
 
-  download_url = "https://github.com/microsoft/onnxruntime/releases/download/v#{ONNXRUNTIME_VERSION}/onnxruntime-osx-universal2-#{ONNXRUNTIME_VERSION}.tgz"
+  download_url = "https://github.com/LyreaG/onnxruntime_flutter/releases/download/onnxruntime-#{ONNXRUNTIME_VERSION}/onnxruntime-osx-universal2-#{ONNXRUNTIME_VERSION}.tgz"
   temp_dir = File.join(SCRIPT_DIR, "temp_download")
   archive_path = File.join(temp_dir, "onnxruntime.tgz")
 

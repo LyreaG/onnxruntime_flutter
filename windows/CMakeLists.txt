@@ -25,7 +25,7 @@ if(EXISTS "${DOWNLOAD_SCRIPT}")
 
   if(NOT DOWNLOAD_RESULT EQUAL 0)
     message(WARNING "Failed to download ONNX Runtime libraries: ${DOWNLOAD_ERROR}")
-    message(WARNING "Please download manually from https://github.com/microsoft/onnxruntime/releases")
+    message(WARNING "Please download manually from https://github.com/LyreaG/onnxruntime_flutter/releases/tag/onnxruntime-1.22.0")
   endif()
 endif()
 
