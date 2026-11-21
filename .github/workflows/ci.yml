@@ -65,12 +65,19 @@ jobs:
             flutter drive -d ${{ matrix.device }} -t test_driver/app.dart
           fi
 
+      # Runs every file under test/ on CPU. gpu_test.dart's tests are skipped
+      # (no ORT_GPU_TESTS=1, no NVIDIA GPU on hosted runners).
       - name: Plugin tests (CPU)
         if: hashFiles('test/**/*.dart') != ''
         shell: bash
         run: |
           flutter pub get
-          # The libraries the build just downloaded into the plugin's platform folder.
+          # Make the libraries the build just downloaded findable by the tests.
+          # Windows: the test preloads the DLL from the example build.
           export LD_LIBRARY_PATH="$GITHUB_WORKSPACE/linux:$LD_LIBRARY_PATH"
-          export DYLD_LIBRARY_PATH="$GITHUB_WORKSPACE/macos:$DYLD_LIBRARY_PATH"
+          # macOS strips DYLD_LIBRARY_PATH when it starts the flutter shell
+          # script, but always searches ~/lib.
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            mkdir -p ~/lib && cp "$GITHUB_WORKSPACE"/macos/libonnxruntime.*.dylib ~/lib/
+          fi
           flutter test
