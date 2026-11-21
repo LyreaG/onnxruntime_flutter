@@ -10,11 +10,16 @@ let package = Package(
   products: [
     .library(name: "onnxruntime-flutter", targets: ["onnxruntime_flutter"])
   ],
-  dependencies: [],
+  dependencies: [
+    .package(name: "FlutterFramework", path: "../FlutterFramework")
+  ],
   targets: [
     .target(
       name: "onnxruntime_flutter",
-      dependencies: ["onnxruntime"]
+      dependencies: [
+        "onnxruntime",
+        .product(name: "FlutterFramework", package: "FlutterFramework"),
+      ]
     ),
     // libonnxruntime.1.22.0.dylib (universal2) from the release, wrapped as a
     // framework so Swift Package Manager can embed it in the app.
