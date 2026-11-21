@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: '3.50.1'
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter analyze
+        working-directory: example
+
+  # Builds the example from scratch, which downloads ONNX Runtime through the
+  # platform scripts, then runs the example's driver test and the plugin tests
+  # on CPU. GPU tests need an NVIDIA GPU and only run locally (ORT_GPU_TESTS=1).
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            device: windows
+          - os: ubuntu-latest
+            device: linux
+          - os: macos-latest
+            device: macos
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev xvfb
+
+      - name: Driver test (builds the example, downloads ONNX Runtime)
+        working-directory: example
+        shell: bash
+        run: |
+          flutter pub get
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            xvfb-run -a flutter drive -d linux -t test_driver/app.dart
+          else
+            flutter drive -d ${{ matrix.device }} -t test_driver/app.dart
+          fi
+
+      - name: Plugin tests (CPU)
+        if: hashFiles('test/**/*.dart') != ''
+        shell: bash
+        run: |
+          flutter pub get
+          # The libraries the build just downloaded into the plugin's platform folder.
+          export LD_LIBRARY_PATH="$GITHUB_WORKSPACE/linux:$LD_LIBRARY_PATH"
+          export DYLD_LIBRARY_PATH="$GITHUB_WORKSPACE/macos:$DYLD_LIBRARY_PATH"
+          flutter test
