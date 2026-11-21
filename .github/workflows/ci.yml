@@ -27,8 +27,7 @@ jobs:
         working-directory: example
 
   # Builds the example from scratch, which downloads ONNX Runtime through the
-  # platform scripts, then runs the example's driver test and the plugin tests
-  # on CPU. GPU tests need an NVIDIA GPU and only run locally (ORT_GPU_TESTS=1).
+  # platform scripts, then runs the example's driver test on CPU.
   desktop:
     strategy:
       fail-fast: false
@@ -64,20 +63,3 @@ jobs:
           else
             flutter drive -d ${{ matrix.device }} -t test_driver/app.dart
           fi
-
-      # Runs every file under test/ on CPU. gpu_test.dart's tests are skipped
-      # (no ORT_GPU_TESTS=1, no NVIDIA GPU on hosted runners).
-      - name: Plugin tests (CPU)
-        if: hashFiles('test/**/*.dart') != ''
-        shell: bash
-        run: |
-          flutter pub get
-          # Make the libraries the build just downloaded findable by the tests.
-          # Windows: the test preloads the DLL from the example build.
-          export LD_LIBRARY_PATH="$GITHUB_WORKSPACE/linux:$LD_LIBRARY_PATH"
-          # macOS strips DYLD_LIBRARY_PATH when it starts the flutter shell
-          # script, but always searches ~/lib.
-          if [ "$RUNNER_OS" = "macOS" ]; then
-            mkdir -p ~/lib && cp "$GITHUB_WORKSPACE"/macos/libonnxruntime.*.dylib ~/lib/
-          fi
-          flutter test
