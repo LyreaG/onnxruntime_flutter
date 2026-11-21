@@ -1,0 +1,79 @@
+# Wraps the release's macOS dylib in onnxruntime.xcframework for Swift Package
+# Manager. Run it by hand (Actions → this workflow → Run workflow), then attach
+# the artifact to the release. See doc/maintainers/macos_swiftpm.md.
+name: Build macOS xcframework
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: ONNX Runtime version, e.g. 1.22.0 (needs an onnxruntime-<version> release with the macOS .tgz and SHA256SUMS)
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-latest
+    env:
+      V: ${{ inputs.version }}
+    steps:
+      - name: Wrap the release dylib in onnxruntime.xcframework
+        run: |
+          set -euxo pipefail
+          BASE="https://github.com/${{ github.repository }}/releases/download/onnxruntime-$V"
+          curl -fsSL -o ort.tgz "$BASE/onnxruntime-osx-universal2-$V.tgz"
+          curl -fsSL -o SHA256SUMS "$BASE/SHA256SUMS"
+          grep "onnxruntime-osx-universal2-$V.tgz" SHA256SUMS | sed "s|onnxruntime-osx-universal2-$V.tgz|ort.tgz|" | shasum -a 256 -c
+          tar -xzf ort.tgz
+          SRC=onnxruntime-osx-universal2-$V
+
+          # Versioned macOS framework layout.
+          F=onnxruntime.framework
+          mkdir -p $F/Versions/A/Resources
+          cp $SRC/lib/libonnxruntime.$V.dylib $F/Versions/A/onnxruntime
+          cp $SRC/LICENSE $SRC/ThirdPartyNotices.txt $F/Versions/A/Resources/
+          MINOS=$(vtool -show-build $F/Versions/A/onnxruntime | awk '/minos/{print $2; exit}')
+          cat > $F/Versions/A/Resources/Info.plist <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleDevelopmentRegion</key><string>en</string>
+            <key>CFBundleExecutable</key><string>onnxruntime</string>
+            <key>CFBundleIdentifier</key><string>com.github.lyreag.onnxruntime</string>
+            <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+            <key>CFBundleName</key><string>onnxruntime</string>
+            <key>CFBundlePackageType</key><string>FMWK</string>
+            <key>CFBundleShortVersionString</key><string>$V</string>
+            <key>CFBundleVersion</key><string>$V</string>
+            <key>LSMinimumSystemVersion</key><string>$MINOS</string>
+          </dict>
+          </plist>
+          PLIST
+          sed -i '' 's/^          //' $F/Versions/A/Resources/Info.plist
+          plutil -lint $F/Versions/A/Resources/Info.plist
+          ln -s A $F/Versions/Current
+          ln -s Versions/Current/onnxruntime $F/onnxruntime
+          ln -s Versions/Current/Resources $F/Resources
+
+          # The dylib's install name must match its new place in the framework.
+          install_name_tool -id @rpath/onnxruntime.framework/Versions/A/onnxruntime $F/Versions/A/onnxruntime
+          codesign --force --sign - $F
+          codesign --verify --strict --verbose=2 $F
+
+          xcodebuild -create-xcframework -framework "$PWD/$F" -output onnxruntime.xcframework
+          ditto -c -k --keepParent onnxruntime.xcframework onnxruntime-macos-$V.xcframework.zip
+
+          lipo -info $F/Versions/A/onnxruntime
+          otool -L $F/Versions/A/onnxruntime
+          nm -gU $F/Versions/A/onnxruntime | grep OrtGetApiBase
+          swift package compute-checksum onnxruntime-macos-$V.xcframework.zip | tee checksum.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: onnxruntime-macos-${{ inputs.version }}-xcframework
+          path: |
+            onnxruntime-macos-*.xcframework.zip
+            checksum.txt
