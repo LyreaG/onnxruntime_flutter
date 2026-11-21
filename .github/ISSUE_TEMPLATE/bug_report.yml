@@ -1,0 +1,48 @@
+name: Bug report
+description: Something doesn't work as expected
+labels: [bug]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      multiple: true
+      options: [Windows, Android, iOS, macOS, Linux]
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device / GPU
+      placeholder: e.g. Pixel 8, RTX 4070, M2 MacBook
+  - type: textarea
+    id: flutter-version
+    attributes:
+      label: Flutter version
+      description: Output of `flutter --version`.
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: providers
+    attributes:
+      label: Execution provider
+      description: Which provider you appended (CPU, CUDA, CoreML…) and what `OrtEnv.instance.availableProviders()` returns.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Console log
+      description: Include any ONNX Runtime error lines.
+      render: text
+  - type: textarea
+    id: model
+    attributes:
+      label: Model
+      description: A link to the model, or its opset and input/output shapes if it can't be shared.
