@@ -12,7 +12,12 @@ final DynamicLibrary _dylib = () {
   }
 
   if (Platform.isMacOS) {
-    return DynamicLibrary.open('libonnxruntime.1.22.0.dylib');
+    // CocoaPods bundles the dylib, Swift Package Manager a framework.
+    try {
+      return DynamicLibrary.open('libonnxruntime.1.22.0.dylib');
+    } on ArgumentError {
+      return DynamicLibrary.open('onnxruntime.framework/onnxruntime');
+    }
   }
 
   if (Platform.isWindows) {
