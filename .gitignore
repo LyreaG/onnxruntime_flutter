@@ -39,3 +39,5 @@ linux/*.so.*
 linux/temp_download/
 windows/*.dll
 windows/temp_download/
+# Local MCP server config (Claude Code)
+.mcp.json

@@ -1,4 +1,4 @@
-library onnxruntime;
+library;
 
 export 'src/ort_env.dart';
 export 'src/ort_provider.dart';

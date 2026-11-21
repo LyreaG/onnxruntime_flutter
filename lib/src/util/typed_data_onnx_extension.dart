@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 
-import 'package:onnxruntime_v2/src/ort_value.dart';
+import 'package:onnxruntime_flutter/src/ort_value.dart';
 
 /// Extension on TypedData to get the corresponding ONNX tensor element data type
 extension TypedDataOnnxType on TypedData {

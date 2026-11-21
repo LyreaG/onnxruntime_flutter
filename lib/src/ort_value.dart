@@ -2,12 +2,12 @@ import 'dart:ffi' as ffi;
 import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
-import 'package:onnxruntime_v2/src/bindings/onnxruntime_bindings_generated.dart'
+import 'package:onnxruntime_flutter/src/bindings/onnxruntime_bindings_generated.dart'
     as bg;
-import 'package:onnxruntime_v2/src/ort_env.dart';
-import 'package:onnxruntime_v2/src/ort_status.dart';
-import 'package:onnxruntime_v2/src/util/list_shape_extension.dart';
-import 'package:onnxruntime_v2/src/util/typed_data_onnx_extension.dart';
+import 'package:onnxruntime_flutter/src/ort_env.dart';
+import 'package:onnxruntime_flutter/src/ort_status.dart';
+import 'package:onnxruntime_flutter/src/util/list_shape_extension.dart';
+import 'package:onnxruntime_flutter/src/util/typed_data_onnx_extension.dart';
 
 /// Internal class to hold reusable buffer information
 class _ReusableBuffer {
