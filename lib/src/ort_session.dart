@@ -37,16 +37,25 @@ class OrtSession {
   /// Creates a session from a file.
   OrtSession.fromFile(File modelFile, OrtSessionOptions options) {
     final pp = calloc<ffi.Pointer<bg.OrtSession>>();
-    final statusPtr = OrtEnv.instance.ortApiPtr.ref.CreateSession.asFunction<
-            bg.OrtStatusPtr Function(
-                ffi.Pointer<bg.OrtEnv>,
-                ffi.Pointer<ffi.Char>,
-                ffi.Pointer<bg.OrtSessionOptions>,
-                ffi.Pointer<ffi.Pointer<bg.OrtSession>>)>()(OrtEnv.instance.ptr,
-        modelFile.path.toNativeUtf8().cast<ffi.Char>(), options._ptr, pp);
-    OrtStatus.checkOrtStatus(statusPtr);
-    _ptr = pp.value;
-    calloc.free(pp);
+    // ORTCHAR_T is wchar_t (UTF-16) on Windows and char (UTF-8) elsewhere; the
+    // bindings are generated with the char shape (-U_WIN32), hence the cast.
+    final path = Platform.isWindows
+        ? modelFile.path.toNativeUtf16(allocator: calloc).cast<ffi.Char>()
+        : modelFile.path.toNativeUtf8(allocator: calloc).cast<ffi.Char>();
+    try {
+      OrtStatus.checkOrtStatus(OrtEnv.instance.ortApiPtr.ref.CreateSession
+          .asFunction<
+              bg.OrtStatusPtr Function(
+                  ffi.Pointer<bg.OrtEnv>,
+                  ffi.Pointer<ffi.Char>,
+                  ffi.Pointer<bg.OrtSessionOptions>,
+                  ffi.Pointer<ffi.Pointer<bg.OrtSession>>)>()(
+          OrtEnv.instance.ptr, path, options._ptr, pp));
+      _ptr = pp.value;
+    } finally {
+      calloc.free(path);
+      calloc.free(pp);
+    }
     _init();
   }
 

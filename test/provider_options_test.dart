@@ -74,4 +74,15 @@ void main() {
     }
   });
 
+  test('fromFile opens a model at a non-ASCII path', () {
+    // On Windows ORT wants a UTF-16 path; UTF-8 would garble "ção".
+    final dir = Directory.systemTemp.createTempSync('ort_ção_');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final model = File('example/assets/models/silero_vad.onnx')
+        .copySync('${dir.path}${Platform.pathSeparator}modelo_ção.onnx');
+
+    final session = OrtSession.fromFile(model, options);
+    addTearDown(session.release);
+    expect(session.inputNames, contains('input'));
+  });
 }
